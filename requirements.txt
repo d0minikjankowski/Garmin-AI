@@ -1,0 +1,5 @@
+streamlit>=1.40,<2
+openai>=1.68,<4
+garmin-connect-personal-api-python==1.0.0
+filelock>=3.16,<4
+tzdata>=2024.1

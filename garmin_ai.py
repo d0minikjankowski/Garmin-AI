@@ -9,6 +9,11 @@ import os
 from pathlib import Path
 import sys
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
+
+def current_time():
+    return datetime.now(ZoneInfo('Europe/Warsaw'))
 
 
 class UserError(Exception):
@@ -101,13 +106,13 @@ def download():
         with GarminPersonalApiClient(token.access_token, timeout=30) as client:
             activities = client.search_activities(start=0, limit=50, activity_type='running')
             from recovery_probe import collect
-            end = datetime.now().date()
+            end = current_time().date()
             start = end - timedelta(days=13)
             print('[2/4] Pobieranie snu, HRV i Body Battery...')
             sources = collect(client, start, end, verbose=False)
             recovery = {
                 'start_date': start.isoformat(), 'end_date': end.isoformat(),
-                'fetched_at': datetime.now().astimezone().isoformat(timespec='seconds'),
+                'fetched_at': current_time().isoformat(timespec='seconds'),
                 'sources': sources,
             }
             return activities, recovery
@@ -141,7 +146,7 @@ def analyze(data):
         response = client.responses.create(
             model='gpt-5-mini', reasoning={'effort': 'low'},
             instructions=instructions,
-            input=f'Data analizy: {datetime.now().date()}.\n\n{data}',
+            input=f'Data analizy: {current_time().date()}.\n\n{data}',
             max_output_tokens=8000, store=False,
         )
     if response.status != 'completed' or not response.output_text.strip():
@@ -155,7 +160,7 @@ def digest(text):
 
 def combined_data(rows, recovery):
     from recovery_summary import summarize, report
-    today = datetime.now().date()
+    today = current_time().date()
     start = today - timedelta(days=6)
     recent = [row for row in rows if start.isoformat() <= row[0][:10] <= today.isoformat()]
     facts = (f'PODSUMOWANIE OBLICZONE PRZEZ PYTHON\nLiczba biegów: {len(rows)}.\n'
@@ -201,7 +206,7 @@ def run_analysis(base, rows, recovery, force=False):
     save(state_path, json.dumps({
         'signature': signature,
         'report_hash': digest(report),
-        'created_at': datetime.now().astimezone().isoformat(timespec='seconds'),
+        'created_at': current_time().isoformat(timespec='seconds'),
     }, ensure_ascii=False, indent=2))
     print('\n' + report)
     print(f'\nZapisano: {target}')
@@ -221,7 +226,8 @@ def main():
         return
     print('[1/4] Pobieranie do 50 biegów z Garmin...')
     activities, recovery = download()
-    base = Path(__file__).resolve().parent
+    base = Path(os.environ.get('GARMIN_DATA_DIR', Path(__file__).resolve().parent)).resolve()
+    base.mkdir(parents=True, exist_ok=True)
     save(base / 'recovery_data.json', json.dumps(recovery, ensure_ascii=False, indent=2))
     failed = [name for name, entry in recovery['sources'].items() if entry.get('status') == 'error']
     if failed:
@@ -229,7 +235,6 @@ def main():
     print('[3/4] Sprawdzanie danych i przygotowanie podsumowań...')
     rows = prepare(activities)
     data = csv_text(rows)
-    base = Path(__file__).resolve().parent
     save(base / 'running_history.csv', data)
     from recovery_summary import summarize, report
     save(base / 'recovery_summary.txt', report(recovery, summarize(recovery)))
