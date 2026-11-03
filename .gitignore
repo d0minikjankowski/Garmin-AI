@@ -1,0 +1,12 @@
+.secrets.clixml
+.env
+.venv/
+__pycache__/
+activities_history.json
+activity_latest.json
+running_history.csv
+raport_ai.txt
+*.tmp
+analysis_state.json
+recovery_data.json
+recovery_summary.txt
